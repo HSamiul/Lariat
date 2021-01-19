@@ -11,6 +11,8 @@ func log(_ message: Any) {
     print("[\(Date())] \(message)")
 }
 
+let group = DispatchGroup()
+
 var clientToken: String = "U2FtaXVsSG8tTGFyaWF0LVBSRC03ZDRhMmZlNjYtNGIwMTBkZDA6UFJELWQ0YTJmZTY2OGMzZS01ZmM3LTRhNmQtYTVjNi05MjZk"
 var redirectURI: String = "Samiul_Hoque-SamiulHo-Lariat-vvdioralj"
 
@@ -53,7 +55,7 @@ struct userTokenRequest: webRequest {
     var userToken: String?
     var refreshToken: String?
     
-    init(authToken: String) {
+    init(_ authToken: String) {
         self.authToken = authToken
         
         self.payload.queryItems = [
@@ -71,37 +73,42 @@ struct userTokenRequest: webRequest {
     }
     
     mutating func sendRequest() {
+        let semaphore = DispatchSemaphore.init(value: 0)
+        
         var userToken: Any?
         var refreshToken: Any?
         
         URLSession.shared.dataTask(with: request) { data, response, error in
+            defer { semaphore.signal() }
+
             guard let data = data, error == nil else {
                 log(error?.localizedDescription ?? "No data received")
                 return
             }
             
-            DispatchQueue.main.async {
-                let responseJSON = try? JSONSerialization.jsonObject(with: data)
+            let responseJSON = (try? JSONSerialization.jsonObject(with: data)) as! [String: Any]
+            
 
-                if let responseJSON = responseJSON as? [String: String] {
-                    userToken = responseJSON["access_token"]
-                    refreshToken = responseJSON["refresh_token"]
+            if let _ = responseJSON["access_token"] {
+                userToken = responseJSON["access_token"]
+                refreshToken = responseJSON["refresh_token"]
                 }
-                
-                else { log("No response JSON received. Unsuccessfully requested user and request token.") }
-            }
+            else { log(responseJSON) }
+    
         }.resume()
+        semaphore.wait()
 
-        if let userToken = userToken { self.userToken = userToken as? String}
+        semaphore.signal()
+        if let userToken = userToken { self.userToken = userToken as? String }
         if let refreshToken = refreshToken { self.refreshToken = refreshToken as? String }
         
         if let _ = userToken, refreshToken != nil {
-            log("Successfully requested user and refresh token.")
+            log("Successfully requested and stored user and refresh token.")
         }
+        semaphore.wait()
     }
 }
 
-var test = userTokenRequest(authToken: "v%5E1.1%23i%5E1%23I%5E3%23r%5E1%23f%5E0%23p%5E3%23t%5EUl41XzU6QTA3QjU5MDRCN0U3NzIwQURBOTEyNzU4QkZGMkU5QzJfMF8xI0VeMjYw")
-
-//test.sendRequest()
-
+//  Test code
+//var URT = userTokenRequest("consentToken")
+//URT.sendRequest()
